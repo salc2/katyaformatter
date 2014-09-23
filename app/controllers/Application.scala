@@ -1,10 +1,6 @@
 package controllers
 
-import play.api.libs.ws.WS
 import play.api.mvc._
-
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 
 object Application extends Controller {
 
@@ -24,7 +20,7 @@ object Application extends Controller {
       val source = scala.io.Source.fromFile(csv.ref.file)
 
      source.getLines.toList map(x => {
-       B ++= formatPretty(x)
+       B ++= formatPretty(x)+"\n"
      })
 
 
@@ -37,9 +33,9 @@ object Application extends Controller {
   }
 
 
-  def formatPretty(bigline:String):Future[String] ={
-    val id = bigline.split(",")(0)
-    val desc = bigline.split(",")(1).replace(".","_").replace(" ","_")
+  def formatPretty(bigline:String):String ={
+    val id = bigline.split(";")(0)
+    val desc = bigline.split(";")(1).replace(".","_").replace(" ","_")
 
     def conver2Letters(line:String):String = {
       val pattern = "^[ña-zÑA-Z]+$"
