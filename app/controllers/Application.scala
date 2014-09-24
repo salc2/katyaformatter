@@ -6,11 +6,12 @@ import play.api.mvc._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
+import scalax.io.{Resource, Output}
 
 object Application extends Controller {
 
   def index = Action {
-    Ok("Hola")
+    Ok(views.html.index("KatyaFormatter"))
   }
 
   def upload2 = Action.async(parse.multipartFormData)  { request =>
@@ -25,33 +26,35 @@ object Application extends Controller {
 
 
 
-  def upload = Action(parse.multipartFormData) { request =>
+  def upload = Action.async(parse.multipartFormData) { request =>
 
 
-    request.body.file("csv").map { csv =>
-      Ok({
-      val B = new StringBuilder
-      val filename = csv.filename
-      val contentType = csv.contentType
-      val source = scala.io.Source.fromFile(csv.ref.file)
-
-     source.getLines.toList map(x => {
-           formatPretty(x) onComplete {
-             case Success(l) => if(!l.trim.isEmpty){ B ++= l+"\n"; println(l+"\n")}
-             case Failure(l) => println("Error")
-           }
-     })
-      source.close()
-      B.toString().getBytes
-      }).as("text/csv")
-    }.getOrElse {
-      Results.BadRequest("Error!!!!")
+    val csv =request.body.file("csv").get
+    val output:Output = Resource.fromFile("readys/ready-"+csv.filename)
+      val futu = scala.concurrent.future{
+        val B = new StringBuilder
+        val filename = csv.filename
+        val contentType = csv.contentType
+        val source = scala.io.Source.fromFile(csv.ref.file)(io.Codec.ISO8859)
+        source.getLines.toList map(x => {
+          formatPretty(x) onComplete {
+            case Success(l) => if(!l.trim.isEmpty){ output.write( l+"\n")(scalax.io.Codec.UTF8)}
+            case Failure(l) => println("Error")
+          }
+        })
+        source.close()
+        B.toString()
+      }
+      futu map {
+      x => Ok("ready")
     }
+
   }
 
 
-  def formatPretty(bigline:String):Future[String] ={
-    if (bigline.split(";").length > 0){
+  def formatPretty(biglineIn:String):Future[String] ={
+    if (biglineIn.split(";").length > 1){
+      val bigline =if(biglineIn.split(";").length==1) biglineIn+"FAULT" else biglineIn
     val id = bigline.split(";")(0)
     val desc = bigline.split(";")(1).replace(".","_").replace(" ","_")
 
