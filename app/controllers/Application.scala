@@ -1,5 +1,8 @@
 package controllers
 
+import java.io.File
+import java.util.UUID
+
 import play.api.mvc._
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -37,7 +40,8 @@ object Application extends Controller {
 */
   def upload = Action.async(parse.multipartFormData) { request =>
     val csv =request.body.file("csv").get
-    val output:Output = Resource.fromFile("/tmp/ready-"+csv.filename)
+   val uuii = File.separator+"tmp"+File.separator+UUID.randomUUID().toString+"-["+csv.filename.replace(".","].")
+    val output:Output = Resource.fromFile(uuii)
       val futu = scala.concurrent.future{
         val B = new StringBuilder
         val filename = csv.filename
@@ -51,8 +55,8 @@ object Application extends Controller {
       }
       futu map {
       x => Ok.sendFile(
-          content = new java.io.File("/tmp/ready-"+csv.filename),
-          fileName = _ => "readys/ready-"+csv.filename
+          content = new java.io.File(uuii),
+          fileName = _ => uuii
       )
     }
 
@@ -135,8 +139,7 @@ object Application extends Controller {
       }
 
       val o = conver2Letters(desc)
-      val o2 = if(o.trim.isEmpty) "FAULT" else o
-      val out = o2.replace(" ","%20")
+      val out = if(o.trim.isEmpty) "FAULT" else o
      "X="+id+";#"+id+"_"+out
      }
 
