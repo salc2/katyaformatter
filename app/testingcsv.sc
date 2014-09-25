@@ -1,9 +1,8 @@
 
 
-val li = "249;Reserve - zzSeq[5].Fault[7].25"
+val li = "613;  *  _1A230_KQ1FT               Dispositivo Programavel Fulga Terra Nok         /     1571,6"
 
-
-def formatPretty(biglineIn:String):String ={
+def formatPretty(biglineIn:String):String  ={
   if (biglineIn.split(";").length > 1){
     val bigline =if(biglineIn.split(";").length==1) biglineIn+"FAULT" else biglineIn
     val id = bigline.split(";")(0)
@@ -20,8 +19,9 @@ def formatPretty(biglineIn:String):String ={
 
     val o = conver2Letters(desc)
     val out = if(o.trim.isEmpty) "FAULT" else o
-    s"X=$id;#$id"+"_"+out
+    //s"X=$id;#$id"+"_"+out
 
+      "X="+id+";#"+id+"_"+out
   }else{
     ""
   }

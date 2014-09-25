@@ -37,7 +37,7 @@ object Application extends Controller {
         val source = scala.io.Source.fromFile(csv.ref.file)(io.Codec.ISO8859)
         source.getLines.toList map(x => {
           formatPretty(x) onSuccess {
-            case l => output.write( l+"\n")(scalax.io.Codec.ISO8859)
+            case l =>output.write( l+"\n")(scalax.io.Codec.ISO8859)
           }
 
         })
@@ -99,17 +99,16 @@ object Application extends Controller {
       }
 
       val o = conver2Letters(desc)
-      val out = if(o.trim.isEmpty) "FAULT" else o
-      //s"X=$id;#$id"+"_"+out
-      val futu = WS.url(s"http://translate.google.com/translate_a/t?client=t&text=$out&hl=pt&sl=pt&tl=en&multires=1&otf=2&pc=1&ssel=0&tsel=0&sc=1".replace(" ","%20").replace("|","%7C")).get().map{
-        //f => s"X=$id;#$id"+"_"+(f.json \ "responseData" \ "translatedText").as[String]
-        f => {
-          if(id.isEmpty) println("Vacio: "+biglineIn)
-          "X="+id+";#"+id+"_"+f.ahcResponse.getResponseBody.replace("[","").replace("]","").split(",")(0).replace("\"","").toUpperCase().replace("BOOK","RESERVE").replace("ROBO","ROBOT").replace("MESA","TABLE")
+      val o2 = if(o.trim.isEmpty) "FAULT" else o
+      val out = o2.replace(" ","%20")
+      val futu = WS.url(s"http://translate.google.com/translate_a/t?client=t&text=$out&hl=pt&sl=pt&tl=en&multires=1&otf=2&pc=1&ssel=0&tsel=0&sc=1").get().map{
+       f => {
+          val strim = "X="+id+";#"+id+"_"+f.ahcResponse.getResponseBody.replace("[","").replace("]","").split(",")(0).replace("\"","").toUpperCase().replace("BOOK","RESERVE").replace("ROBO","ROBOT").replace("MESA","TABLE")
+          strim
         }
       }
       futu map {
-        x => x
+        x =>  x
       }
     }else{
       Future("")
