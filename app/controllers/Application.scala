@@ -3,9 +3,11 @@ package controllers
 import java.io.File
 import java.util.UUID
 
+import play.api.libs.ws.WS
 import play.api.mvc._
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import scalax.io.{Output, Resource}
 
 object Application extends Controller {
@@ -47,9 +49,17 @@ object Application extends Controller {
         val filename = csv.filename
         val contentType = csv.contentType
         val source = scala.io.Source.fromFile(csv.ref.file)(io.Codec.ISO8859)
-        source.getLines.toList map(x => {
-          if(!x.trim.isEmpty){ output.write( formatPretty(x) +"\n" ) (scalax.io.Codec.ISO8859)}
-        })
+        val g = request.body.asFormUrlEncoded.get("translate").getOrElse(List.empty)
+        if(g.isEmpty){
+          source.getLines.toList map(x => {
+            if(!x.trim.isEmpty){ output.write( formatPrettyOffline(x) +"\n" ) (scalax.io.Codec.ISO8859)}
+          })
+        }else{
+          source.getLines.toList map(x => {
+            if(!x.trim.isEmpty){ formatPrettyOnline(x) map {x =>  output.write( x +"\n" ) (scalax.io.Codec.ISO8859) }}
+          })
+        }
+
         source.close()
         B.toString()
       }
@@ -94,8 +104,8 @@ object Application extends Controller {
 
 
 
-/*
-  def formatPretty(bigline:String):Future[String] ={
+
+  def formatPrettyOnline(bigline:String):Future[String] ={
 
   val lsl = bigline.split(";").toList
   val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
@@ -117,12 +127,12 @@ object Application extends Controller {
         "X="+id+";#"+id+"_"+f.ahcResponse.getResponseBody.replace("[","").replace("]","").split(",")(0).replace("\"","").toUpperCase().replace("ROBO","ROBOT").replace("MESA","TABLE").replace("BOOK","RESERVE")
       }
     }
-   }*/
+   }
 
 
 
 
-  def formatPretty(bigline:String):String ={
+  def formatPrettyOffline(bigline:String):String ={
 
     val lsl = bigline.split(";").toList
     val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
