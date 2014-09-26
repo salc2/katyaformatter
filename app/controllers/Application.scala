@@ -1,6 +1,7 @@
 package controllers
 
 import java.io.File
+import java.nio.charset.CodingErrorAction
 import java.util.UUID
 
 import play.api.libs.ws.WS
@@ -45,23 +46,24 @@ object Application extends Controller {
    val uuii = File.separator+"tmp"+File.separator+UUID.randomUUID().toString+"-["+csv.filename.replace(".","].")
     val output:Output = Resource.fromFile(uuii)
       val futu = scala.concurrent.future{
-        val B = new StringBuilder
         val filename = csv.filename
         val contentType = csv.contentType
-        val source = scala.io.Source.fromFile(csv.ref.file)(io.Codec.ISO8859)
+        implicit val codec = scala.io.Codec("UTF-8")
+        codec.onMalformedInput(CodingErrorAction.REPLACE)
+        codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
+        val source = scala.io.Source.fromFile(csv.ref.file)
         val g = request.body.asFormUrlEncoded.get("translate").getOrElse(List.empty)
         if(g.isEmpty){
           source.getLines.toList map(x => {
-            if(!x.trim.isEmpty){ output.write( formatPrettyOffline(x) +"\n" ) (scalax.io.Codec.ISO8859)}
+            if(!x.trim.isEmpty){ output.write( formatPrettyOffline(x) +"\n" ) (scalax.io.Codec.UTF8)}
           })
+          source.close()
         }else{
           source.getLines.toList map(x => {
-            if(!x.trim.isEmpty){ formatPrettyOnline(x) map {x =>  output.write( x +"\n" ) (scalax.io.Codec.ISO8859) }}
+            if(!x.trim.isEmpty){ formatPrettyOnline(x) onSuccess  {case x =>  println(x);output.write( x +"\n" ) }}
           })
+          source.close()
         }
-
-        source.close()
-        B.toString()
       }
       futu map {
       x => Ok.sendFile(
@@ -107,38 +109,41 @@ object Application extends Controller {
 
   def formatPrettyOnline(bigline:String):Future[String] ={
 
-  val lsl = bigline.split(";").toList
-  val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
-  val id = lsl.head
-  val desc = tail.replace(".","_").replace(" ","_")
-    def conver2Letters(line:String):String = {
-      val pattern = "^[ña-zÑA-Z]+$"
-      val splitL = line.replaceAll("[^ña-zÑA-Z]"," ").replace(" ","_").split("_")
-      def choice(l:List[String],total:List[String]):String = {
-        if(l.isEmpty) total.mkString(" ") else if(l.head matches(pattern)) choice(l.tail,total:+l.head)
-        else{ choice(l.tail,total)}}
-      choice(splitL.toList,List.empty).toUpperCase()
-    }
+    val lsl = bigline.split("""\;""").toList
+    if(lsl.isEmpty){Future("")}else{
+      val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
+      val id = lsl.head
+      val desc = tail.replace(".","_").replace(" ","_")
+      def conver2Letters(line:String):String = {
+        val pattern = "^[ña-zÑA-Z]+$"
+        val splitL = line.replaceAll("[^ña-zÑA-Z]"," ").replace(" ","_").split("_")
+        def choice(l:List[String],total:List[String]):String = {
+          if(l.isEmpty) total.mkString(" ") else if(l.head matches(pattern)) choice(l.tail,total:+l.head)
+          else{ choice(l.tail,total)}}
+        choice(splitL.toList,List.empty).toUpperCase()
+      }
 
     val o = conver2Letters(desc)
     val out = if(o.trim.isEmpty) "FAULT" else o
     WS.url(s"http://translate.google.com/translate_a/t?client=t&text=$out&hl=pt&sl=pt&tl=en&multires=1&otf=2&pc=1&ssel=0&tsel=0&sc=1".replace(" ","%20").replace("|","%7C")).get().map{
       f => {
+
         "X="+id+";#"+id+"_"+f.ahcResponse.getResponseBody.replace("[","").replace("]","").split(",")(0).replace("\"","").toUpperCase().replace("ROBO","ROBOT").replace("MESA","TABLE").replace("BOOK","RESERVE")
       }
     }
+   }
    }
 
 
 
 
-  def formatPrettyOffline(bigline:String):String ={
+  def formatPrettyOffline(bigline:String):String = {
 
-    val lsl = bigline.split(";").toList
-    val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
-    val id = lsl.head
-    val desc = tail.replace(".","_").replace(" ","_")
-
+    val lsl = bigline.split("""\;""").toList
+    if(lsl.isEmpty){""}else{
+      val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
+      val id = lsl.head
+      val desc = tail.replace(".","_").replace(" ","_")
       def conver2Letters(line:String):String = {
         val pattern = "^[ña-zÑA-Z]+$"
         val splitL = line.replaceAll("[^ña-zÑA-Z]"," ").replace(" ","_").split("_")
@@ -149,10 +154,10 @@ object Application extends Controller {
       }
 
       val o = conver2Letters(desc)
-      val out = if(o.trim.isEmpty) "FAULT" else o
-     "X="+id+";#"+id+"_"+out
-     }
-
+      val out = if (o.trim.isEmpty) "FAULT" else o
+      "X=" + id + ";#" + id + "_" + out
+    }
+  }
 
 
 }

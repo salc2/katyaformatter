@@ -1,13 +1,16 @@
 
 
-val li = "613;  *  _1A230_KQ1FT               Dispositivo Programavel Fulga Terra Nok         /     1571,6"
+val li = "546;  *  _1A2_1M3.ModuleStatus      Falha EtherNet Modulo Safety                    /"
 
-def formatPretty(biglineIn:String):String  ={
-  if (biglineIn.split(";").length > 1){
-    val bigline =if(biglineIn.split(";").length==1) biglineIn+"FAULT" else biglineIn
-    val id = bigline.split(";")(0)
-    val desc = bigline.split(";")(1).replace(".","_").replace(" ","_")
 
+
+def formatPrettyOffline(bigline:String):String = {
+
+  val lsl = bigline.split("""\;""").toList
+  if(lsl.isEmpty){""}else{
+    val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
+    val id = lsl.head
+    val desc = tail.replace(".","_").replace(" ","_")
     def conver2Letters(line:String):String = {
       val pattern = "^[ña-zÑA-Z]+$"
       val splitL = line.replaceAll("[^ña-zÑA-Z]"," ").replace(" ","_").split("_")
@@ -18,13 +21,11 @@ def formatPretty(biglineIn:String):String  ={
     }
 
     val o = conver2Letters(desc)
-    val out = if(o.trim.isEmpty) "FAULT" else o
-    //s"X=$id;#$id"+"_"+out
-
-      "X="+id+";#"+id+"_"+out
-  }else{
-    ""
+    val out = if (o.trim.isEmpty) "FAULT" else o
+    "X=" + id + ";#" + id + "_" + out
   }
 }
 
-formatPretty(li)
+
+
+formatPrettyOffline(li)
