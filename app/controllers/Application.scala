@@ -1,15 +1,15 @@
 package controllers
 
-import java.io.File
 import java.nio.charset.CodingErrorAction
 import java.util.UUID
 
+import com.mongodb.casbah.commons.MongoDBObject
+import com.mongodb.casbah.{MongoClient, MongoCollection}
 import play.api.libs.ws.WS
 import play.api.mvc._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scalax.io.{Output, Resource}
 
 object Application extends Controller {
 
@@ -43,8 +43,9 @@ object Application extends Controller {
 */
   def upload = Action.async(parse.multipartFormData) { request =>
     val csv =request.body.file("csv").get
-   val uuii = File.separator+"tmp"+File.separator+UUID.randomUUID().toString+"-["+csv.filename.replace(".","].")
-    val output:Output = Resource.fromFile(uuii)
+   val uuii = "files"+UUID.randomUUID().toString.replace("-","").substring(0,4)
+    //val output:Output = Resource.fromFile(File.separator+"tmp"+File.separator+csv.filename)
+   val collec:MongoCollection = MongoClient("localhost")("dbfiles")(uuii)
       val futu = scala.concurrent.future{
         val filename = csv.filename
         val contentType = csv.contentType
@@ -55,21 +56,23 @@ object Application extends Controller {
         val g = request.body.asFormUrlEncoded.get("translate").getOrElse(List.empty)
         if(g.isEmpty){
           source.getLines.toList map(x => {
-            if(!x.trim.isEmpty){ output.write( formatPrettyOffline(x) +"\n" ) (scalax.io.Codec.UTF8)}
+           if(!x.trim.isEmpty){ formatPrettyOffline(x,collec) }
           })
           source.close()
         }else{
           source.getLines.toList map(x => {
-            if(!x.trim.isEmpty){ formatPrettyOnline(x) onSuccess  {case x =>  println(x);output.write( x +"\n" ) }}
+            if(!x.trim.isEmpty){ formatPrettyOnline(x,collec) onSuccess  {case x => x }}
           })
           source.close()
         }
       }
       futu map {
-      x => Ok.sendFile(
-          content = new java.io.File(uuii),
+       // val output:Output = Resource.fromFile("/tmp/"+csv.filename)
+       // for (inv <- collec) yield output.write(inv.get("line").toString+"\n")
+        x => Ok(uuii)/*sendFile(
+          content = new java.io.File("/tmp/"+csv.filename),
           fileName = _ => uuii
-      )
+        )*/
     }
 
   }
@@ -107,8 +110,7 @@ object Application extends Controller {
 
 
 
-  def formatPrettyOnline(bigline:String):Future[String] ={
-
+  def formatPrettyOnline(bigline:String,collec:MongoCollection):Future[String] ={
     val lsl = bigline.split("""\;""").toList
     if(lsl.isEmpty){Future("")}else{
       val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
@@ -127,8 +129,9 @@ object Application extends Controller {
     val out = if(o.trim.isEmpty) "FAULT" else o
     WS.url(s"http://translate.google.com/translate_a/t?client=t&text=$out&hl=pt&sl=pt&tl=en&multires=1&otf=2&pc=1&ssel=0&tsel=0&sc=1".replace(" ","%20").replace("|","%7C")).get().map{
       f => {
-
-        "X="+id+";#"+id+"_"+f.ahcResponse.getResponseBody.replace("[","").replace("]","").split(",")(0).replace("\"","").toUpperCase().replace("ROBO","ROBOT").replace("MESA","TABLE").replace("BOOK","RESERVE")
+        val s = "X="+id+";#"+id+"_"+f.ahcResponse.getResponseBody.replace("[","").replace("]","").split(",")(0).replace("\"","").toUpperCase().replace("ROBO","ROBOT").replace("MESA","TABLE").replace("BOOK","RESERVE")
+        collec.save(MongoDBObject("line"->s))
+        s
       }
     }
    }
@@ -137,7 +140,7 @@ object Application extends Controller {
 
 
 
-  def formatPrettyOffline(bigline:String):String = {
+  def formatPrettyOffline(bigline:String,collec:MongoCollection):String = {
 
     val lsl = bigline.split("""\;""").toList
     if(lsl.isEmpty){""}else{
@@ -155,7 +158,9 @@ object Application extends Controller {
 
       val o = conver2Letters(desc)
       val out = if (o.trim.isEmpty) "FAULT" else o
-      "X=" + id + ";#" + id + "_" + out
+      val s = "X=" + id + ";#" + id + "_" + out
+      collec.save(MongoDBObject("line"->s))
+      s
     }
   }
 

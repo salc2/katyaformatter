@@ -3,7 +3,7 @@ name := "katyaformatter"
 version := "1.0-SNAPSHOT"
 
 libraryDependencies ++= Seq(
-  jdbc,
+  "org.mongodb" %% "casbah" % "2.7.3",
   anorm,
   cache
 )     
