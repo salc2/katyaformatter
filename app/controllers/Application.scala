@@ -1,19 +1,44 @@
 package controllers
 
-import java.io.File
 import java.nio.charset.CodingErrorAction
 import java.util.UUID
 
-import com.mongodb.casbah.commons.MongoDBObject
-import com.mongodb.casbah.{MongoClient, MongoCollection}
+import akka.actor.{Actor, ActorLogging, Props}
+import akka.pattern.ask
+import akka.util.Timeout
+import play.api.Play.current
+import play.api.libs.concurrent.Akka
 import play.api.libs.ws.WS
 import play.api.mvc._
 
+import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scalax.io.{Output, Resource}
+import scala.concurrent.duration.DurationDouble
+import scalax.io.Resource
 
 object Application extends Controller {
+
+  val myActor = Akka.system.actorOf(Props[QueueActor], name = "myactor")
+  case class Putter(fileName:String,row:String)
+  case class Getter(fileName:String)
+
+  class QueueActor extends Actor with ActorLogging {
+    val map:mutable.Map[String,String] = mutable.HashMap()
+    def receive = {
+      case Putter(fileName,row) =>{
+        map.get(fileName) match {
+          case Some(x) => Resource.fromFile(x.toString).write(row+"\n")
+          case None => Resource.fromFile("/tmp/"+fileName).write(row+"\n");map.put(fileName , "/tmp/"+fileName)
+        }
+        log.info(fileName +" -> "+ row)
+      }
+      case Getter(fileName) => map.get(fileName) match {
+        case Some(x) => sender ! x.toString
+        case None => sender ! None
+      }
+     }
+  }
 
 
   def index = Action {
@@ -25,26 +50,23 @@ object Application extends Controller {
    Ok(views.html.indexDownload(fileName,col))
  }
 
-  def download = Action{ implicit request =>
-   val uuii = request.body.asFormUrlEncoded.get("uuii").toList.head
+
+  def download = Action.async{ implicit request =>
+    val uuii = request.body.asFormUrlEncoded.get("uuii").toList.head
     val fileName = request.body.asFormUrlEncoded.get("fileName").toList.head
-    val collec:MongoCollection = MongoClient ("localhost")("dbfile")(uuii)
-    val file = new File("/tmp/"+uuii+fileName)
-    file.createNewFile()
-    val f:Output = Resource.fromFile("/tmp/"+uuii+fileName)
-    collec foreach (doc => f.write(doc.get("line").toString+"\n"))
-    collec.drop()
+    implicit  val timeout= Timeout(5.seconds)
+    (myActor ? Getter(uuii)) map { response =>
     Ok.sendFile(
-      content = new java.io.File("/tmp/"+uuii+fileName),
+      content = new java.io.File(response.toString),
       fileName = _ => fileName.replace(".","-PRO.")
     )
+    }
   }
+
 
   def upload = Action.async(parse.multipartFormData) { request =>
     val csv =request.body.file("csv").get
    val uuii = "files"+UUID.randomUUID().toString.replace("-","").substring(0,4)
-    //val output:Output = Resource.fromFile(File.separator+"tmp"+File.separator+csv.filename)
-    val collec:MongoCollection = MongoClient ("localhost")("dbfile")(uuii)
       val futu = scala.concurrent.future{
         val filename = csv.filename
         val contentType = csv.contentType
@@ -55,12 +77,12 @@ object Application extends Controller {
         val g = request.body.asFormUrlEncoded.get("translate").getOrElse(List.empty)
         if(g.isEmpty){
           source.getLines.toList map(x => {
-           if(!x.trim.isEmpty){ formatPrettyOffline(x,collec) }
+           if(!x.trim.isEmpty){ formatPrettyOffline(x,uuii) }
           })
           source.close()
         }else{
           source.getLines.toList map(x => {
-            if(!x.trim.isEmpty){ formatPrettyOnline(x,collec) onSuccess  {case x => x }}
+            if(!x.trim.isEmpty){ formatPrettyOnline(x,uuii) onSuccess  {case x => x }}
           })
           source.close()
         }
@@ -72,7 +94,7 @@ object Application extends Controller {
   }
 
 
-  def formatPrettyOnline(bigline:String,collec:MongoCollection):Future[String] ={
+  def formatPrettyOnline(bigline:String,fileN:String):Future[String] ={
     val lsl = bigline.split("""\;""").toList
     if(lsl.isEmpty){Future("")}else{
       val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
@@ -93,7 +115,7 @@ object Application extends Controller {
     WS.url(s"http://translate.google.com/translate_a/t?client=t&text=$out&hl=pt&sl=pt&tl=en&multires=1&otf=2&pc=1&ssel=0&tsel=0&sc=1".replace(" ","%20").replace("|","%7C")).get().map{
       f => {
         val s = "X="+id+";#"+id+"_"+f.ahcResponse.getResponseBody.replace("[","").replace("]","").split(",")(0).replace("\"","").toUpperCase().replace("ROBO","ROBOT").replace("MESA","TABLE").replace("BOOK","RESERVE").replace("PECA","PART").toUpperCase
-        collec.save(MongoDBObject("line"->s))
+         myActor ! Putter(fileN,s)
         s
       }
     }
@@ -103,7 +125,7 @@ object Application extends Controller {
 
 
 
-  def formatPrettyOffline(bigline:String,collec:MongoCollection):String = {
+  def formatPrettyOffline(bigline:String,fileN:String):String = {
     val lsl = bigline.split("""\;""").toList
     if(lsl.isEmpty){""}else{
       val tail = if(lsl.tail.isEmpty) "FAULT" else lsl.tail.head
@@ -122,7 +144,7 @@ object Application extends Controller {
       val o = conver2Letters(dessp)
       val out = if (o.trim.isEmpty) "FAULT" else o
       val s = "X=" + id + ";#" + id + "_" + out
-      collec.save(MongoDBObject("line"->s))
+      myActor ! Putter(fileN,s)
       s
     }
   }
